@@ -272,12 +272,20 @@ export default function ConversationsPage() {
 
   const syncFromGHL = async () => {
     setSyncing(true);
-    try { await fetch("/api/conversations?sync=true"); await load(); }
+    try {
+      // Refresh conversation cache from GHL
+      await fetch("/api/conversations?sync=true");
+      // Also scan for missed inbound messages (webhook fallback)
+      await fetch("/api/cron/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+      await load();
+    }
     finally { setSyncing(false); }
   };
 
   useEffect(() => {
     load();
+    // Trigger sync on mount to catch any missed messages
+    fetch("/api/cron/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) }).catch(() => {});
     pollRef.current = setInterval(() => load(), 30000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [load]);

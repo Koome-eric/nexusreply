@@ -764,6 +764,48 @@ export default function ClientSettingsPage() {
         )}
       </div>
 
+      {/* SYNC SETUP — alternative to Vercel cron (free) */}
+      <div
+        style={{
+          background: "rgba(13,21,37,0.9)",
+          border: "1px solid rgba(245,158,11,0.2)",
+          borderRadius: "14px",
+          padding: "20px 24px",
+          marginBottom: "24px",
+        }}
+      >
+        <div style={{ fontSize: "11px", fontWeight: 700, color: "#f59e0b", letterSpacing: "0.06em", marginBottom: "14px" }}>
+          MISSED MESSAGE SYNC
+        </div>
+        <p style={{ fontSize: "12px", color: "#7c9ab8", marginBottom: "16px", lineHeight: 1.7, margin: "0 0 14px" }}>
+          The app automatically scans for missed email/SMS replies every time you open Conversations.
+          For continuous background syncing (catches replies even when the app is closed), set up a GHL Workflow trigger — it&apos;s free and runs every 5 minutes.
+        </p>
+
+        <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "10px", padding: "14px 16px", marginBottom: "14px" }}>
+          <div style={{ fontSize: "11px", fontWeight: 700, color: "#7c9ab8", marginBottom: "10px" }}>SYNC URL (add to GHL Workflow)</div>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <code style={{ flex: 1, background: "rgba(245,158,11,0.06)", padding: "9px 12px", borderRadius: "8px", color: "#f59e0b", fontSize: "12px", wordBreak: "break-all" }}>
+              {typeof window !== "undefined" ? window.location.origin : ""}/api/cron/sync?secret={"{CRON_SECRET}"}
+            </code>
+          </div>
+          <div style={{ fontSize: "10px", color: "#445566", marginTop: "6px" }}>Replace {"{CRON_SECRET}"} with your CRON_SECRET env var value.</div>
+        </div>
+
+        <div style={{ fontSize: "11px", color: "#7c9ab8", fontWeight: 700, marginBottom: "8px" }}>GHL WORKFLOW SETUP (2 minutes)</div>
+        {[
+          "In GoHighLevel → Automations → Workflows, create a new workflow.",
+          "Set the trigger to \"Recurring\" with a 5-minute interval.",
+          'Add a "Webhook" action with method GET and the Sync URL above.',
+          "Activate the workflow. Done — email replies will now sync automatically.",
+        ].map((step, i) => (
+          <div key={i} style={{ display: "flex", gap: "10px", marginBottom: "8px", alignItems: "flex-start" }}>
+            <div style={{ width: "18px", height: "18px", borderRadius: "50%", flexShrink: 0, background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: 800, color: "#f59e0b" }}>{i + 1}</div>
+            <div style={{ fontSize: "12px", color: "#7c9ab8", lineHeight: 1.6 }}>{step}</div>
+          </div>
+        ))}
+      </div>
+
       {/* SAVE */}
       <button
         onClick={handleSave}
