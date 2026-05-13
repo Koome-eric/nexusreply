@@ -1,0 +1,545 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  name              String?
+  password          String?
+  // roles: "admin" | "agency" | "user" | "client"
+  role              String    @default("user")
+  // For client users: which agency account owns them
+  agencyOwnerId     String?
+  emailVerified     Boolean   @default(false)
+  avatarUrl         String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  subscription      Subscription?
+  agencyProfile     AgencyProfile?
+  ghlConnections    GHLConnection[]
+  locations         Location[]
+  businessProfiles  BusinessProfile[]
+  automationConfigs AutomationConfig[]
+  aiLogs            AIMessageLog[]
+  conversations     ConversationCache[]
+  usageLogs         UsageLog[]
+  contactMemory     ContactMemory[]
+  aiAgents          AIAgent[]
+  leadPipelines     LeadPipeline[]
+  outboundCampaigns OutboundCampaign[]
+  notifications     Notification[]
+  teamChatMessages  TeamChatMessage[]
+  locationMemberships LocationMember[] @relation("ClientMember")
+}
+
+
+model GHLConnection {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ghlUserId       String?
+  ghlCompanyId    String?
+  accessToken     String
+  refreshToken    String
+  tokenExpiresAt  DateTime?
+  connectedAt     DateTime  @default(now())
+  locations       Location[]
+  @@index([userId])
+}
+
+model Location {
+  id                String    @id @default(cuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ghlConnectionId   String
+  ghlConnection     GHLConnection @relation(fields: [ghlConnectionId], references: [id], onDelete: Cascade)
+  ghlLocationId     String    @unique
+  name              String
+  address           String?
+  timezone          String?
+  phone             String?
+  email             String?
+  automationEnabled Boolean   @default(false)
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  businessProfile   BusinessProfile?
+  automationConfig  AutomationConfig?
+  aiLogs            AIMessageLog[]
+  conversations     ConversationCache[]
+  webhookEvents     WebhookEvent[]
+  aiAgents          AIAgent[]
+  leadPipelines     LeadPipeline[]
+  outboundCampaigns OutboundCampaign[]
+  ghlPipelineSync   GHLPipelineSync?
+  webhookReg        WebhookRegistration?
+  locationMembers   LocationMember[]
+  clientInvites     ClientInvite[]
+  emailProvider     EmailProvider?
+
+  @@index([userId])
+  @@index([ghlLocationId])
+}
+
+model EmailProvider {
+  id           String    @id @default(cuid())
+  locationId   String    @unique
+  location     Location  @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  provider     String    @default("resend")
+  fromName     String    @default("")
+  fromEmail    String    @default("")
+  replyTo      String?
+  resendApiKey String?
+  smtpHost     String?
+  smtpPort     Int?      @default(587)
+  smtpUser     String?
+  smtpPass     String?
+  smtpSecure   Boolean   @default(false)
+  verified     Boolean   @default(false)
+  lastTestedAt DateTime?
+  lastError    String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([locationId])
+}
+
+model BusinessProfile {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  locationId    String    @unique
+  location      Location  @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  businessName  String
+  niche         String
+  tone          String    @default("friendly")
+  description   String    @db.Text
+  offers        String    @db.Text
+  faqs          String    @db.Text
+  objections    String    @db.Text
+  closingStyle  String    @default("consultative")
+  customRules   String?   @db.Text
+  language      String    @default("English")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model AutomationConfig {
+  id                    String    @id @default(cuid())
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  locationId            String    @unique
+  location              Location  @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  enabled               Boolean   @default(false)
+  smsEnabled            Boolean   @default(true)
+  emailEnabled          Boolean   @default(true)
+  aiModel               String    @default("gpt-4o-mini")
+  maxDelaySec           Int       @default(3)
+  minDelaySec           Int       @default(1)
+  humanFallbackEnabled  Boolean   @default(true)
+  confidenceThreshold   Float     @default(0.7)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+model Subscription {
+  id                     String    @id @default(cuid())
+  userId                 String    @unique
+  user                   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan                   String    @default("trial")
+  status                 String    @default("trialing")
+  trialEndsAt            DateTime
+  trialMessagesLimit     Int       @default(50)
+  trialMessagesUsed      Int       @default(0)
+  provider               String?   // "stripe" or "paypal"
+  providerRef            String?   // subscription ID from provider
+  paypalSubscriptionId   String?   @unique
+  paystackCustomerCode   String?
+  stripeCustomerId       String?   @unique
+  stripeSubId            String?   @unique
+  stripePriceId          String?
+  currentPeriodEnd       DateTime?
+  locationLimit          Int       @default(1)
+  monthlyMessageLimit    Int       @default(500)
+  messagesUsedThisPeriod Int       @default(0)
+  periodResetsAt         DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+}
+
+model UsageLog {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  locationId  String?
+  tokens      Int       @default(0)
+  messageType String?
+  createdAt   DateTime  @default(now())
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model ContactMemory {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contactId    String
+  locationId   String?
+  interests    String[]
+  budget       String?
+  objections   String[]
+  stage        String    @default("new")
+  tags         String[]
+  notes        String?   @db.Text
+  lastIntent   String?
+  messageCount Int       @default(0)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  @@unique([userId, contactId])
+  @@index([userId])
+  @@index([contactId])
+}
+
+model ConversationCache {
+  id                  String    @id @default(cuid())
+  userId              String
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  locationId          String?
+  location            Location? @relation(fields: [locationId], references: [id])
+  ghlConversationId   String    @unique
+  contactId           String
+  contactName         String?
+  contactEmail        String?
+  contactPhone        String?
+  lastMessageAt       DateTime  @default(now())
+  status              String    @default("active")
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  @@index([userId])
+  @@index([locationId])
+}
+
+model AIMessageLog {
+  id               String    @id @default(cuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  locationId       String?
+  location         Location? @relation(fields: [locationId], references: [id])
+  contactId        String
+  conversationId   String
+  messageType      String
+  agentId          String?
+  agent            AIAgent?  @relation(fields: [agentId], references: [id])
+  inputMessage     String    @db.Text
+  aiResponse       String    @db.Text
+  intent           String?
+  agentAction      String?
+  promptTokens     Int?
+  completionTokens Int?
+  confidence       Float?
+  wasOverridden    Boolean   @default(false)
+  humanTookOver    Boolean   @default(false)
+  status           String    @default("sent")
+  createdAt        DateTime  @default(now())
+  @@index([userId])
+  @@index([locationId])
+  @@index([contactId])
+}
+
+model WebhookEvent {
+  id              String    @id @default(cuid())
+  locationId      String?
+  location        Location? @relation(fields: [locationId], references: [id])
+  ghlLocationId   String
+  contactId       String
+  conversationId  String
+  messageBody     String    @db.Text
+  messageType     String
+  source          String?
+  processed       Boolean   @default(false)
+  processedAt     DateTime?
+  error           String?
+  createdAt       DateTime  @default(now())
+  @@index([ghlLocationId])
+  @@index([processed])
+}
+
+// ─── AGENCY PROFILE (White-label branding + identity) ────────────
+
+model AgencyProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Branding
+  agencyName      String   @default("My Agency")
+  logoUrl         String?
+  primaryColor    String   @default("#14b8a6")
+  secondaryColor  String   @default("#0f172a")
+  accentColor     String   @default("#8b5cf6")
+  supportEmail    String?
+  website         String?
+
+  // Contact info shown on client panel
+  phone           String?
+  address         String?
+  tagline         String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ─── AI SALES TEAM ────────────────────────────────────────────────
+
+model AIAgent {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  locationId    String
+  location      Location  @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  // agencyId: set to the agency owner's userId so agents are scoped per-agency
+  // For single/user accounts this equals userId. For agency-created agents it is the agency userId.
+  agencyId      String?
+
+  name          String
+  role          String    // SDR | SETTER | CLOSER | FOLLOWUP | CUSTOM
+  avatar        String?
+  systemPrompt  String    @db.Text
+  tone          String    @default("friendly")
+  isActive      Boolean   @default(true)
+  isDefault     Boolean   @default(false)
+  order         Int       @default(0)
+
+  triggerIntents  String[]
+  triggerStages   String[]
+  triggerKeywords String[]
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  assignedLeads LeadPipeline[]
+  messageLogs   AIMessageLog[]
+
+  @@index([userId])
+  @@index([locationId])
+  @@index([agencyId])
+}
+
+model LeadPipeline {
+  id                String    @id @default(cuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  locationId        String
+  location          Location  @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  contactId         String
+  contactName       String?
+  contactEmail      String?
+  contactPhone      String?
+  ghlConversationId String?
+
+  stage             String    @default("NEW")
+  // NEW | ENGAGED | QUALIFIED | BOOKING | CLOSING | WON | LOST | NURTURE
+
+  assignedAgentId   String?
+  assignedAgent     AIAgent?  @relation(fields: [assignedAgentId], references: [id])
+
+  score             Int       @default(0)
+  isQualified       Boolean   @default(false)
+  hasBooked         Boolean   @default(false)
+  lastIntent        String?
+  notes             String?   @db.Text
+
+  outboundStarted   Boolean   @default(false)
+  outboundChannel   String?
+  messageCount      Int       @default(0)
+  lastMessageAt     DateTime?
+  lastReplyAt       DateTime?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  stageHistory      PipelineStageHistory[]
+
+  @@unique([locationId, contactId])
+  @@index([userId])
+  @@index([locationId])
+  @@index([stage])
+  @@index([assignedAgentId])
+}
+
+model PipelineStageHistory {
+  id          String    @id @default(cuid())
+  leadId      String
+  lead        LeadPipeline @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  fromStage   String?
+  toStage     String
+  agentId     String?
+  reason      String?
+  triggeredBy String?
+
+  createdAt   DateTime  @default(now())
+
+  @@index([leadId])
+}
+
+model OutboundCampaign {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  locationId   String
+  location     Location  @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  name         String
+  agentId      String
+  channel      String
+  status       String    @default("draft")
+
+  sequence     Json      @default("[]")
+
+  contactCount Int       @default(0)
+  sentCount    Int       @default(0)
+  replyCount   Int       @default(0)
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([locationId])
+}
+
+// ─── GLOBAL AGENT TEMPLATES (Admin-controlled) ───────────────────
+
+model GlobalAgentTemplate {
+  id               String    @id @default(cuid())
+  name             String
+  role             String
+  avatar           String    @default("🤖")
+  description      String?
+  systemPrompt     String    @db.Text
+  tone             String    @default("friendly")
+  version          Int       @default(1)
+  isActive         Boolean   @default(true)
+  performanceScore Float?
+  trainingNotes    String?   @db.Text
+
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+// ─── NOTIFICATIONS ────────────────────────────────────────────────
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type      String
+  title     String
+  message   String    @db.Text
+  data      Json?
+  read      Boolean   @default(false)
+  readAt    DateTime?
+
+  createdAt DateTime  @default(now())
+
+  @@index([userId, read])
+  @@index([userId, createdAt])
+}
+
+// ─── GHL PIPELINE SYNC ────────────────────────────────────────────
+
+model GHLPipelineSync {
+  id             String    @id @default(cuid())
+  locationId     String    @unique
+  location       Location  @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  ghlPipelineId  String
+  ghlStageMap    Json
+  syncEnabled    Boolean   @default(true)
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+// ─── WEBHOOK REGISTRATIONS ────────────────────────────────────────
+
+model WebhookRegistration {
+  id           String    @id @default(cuid())
+  locationId   String    @unique
+  location     Location  @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  ghlWebhookId String?
+  url          String
+  events       String[]
+  isActive     Boolean   @default(true)
+  lastError    String?
+  registeredAt DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+// ─── AI TEAM CHAT ─────────────────────────────────────────────────
+
+model TeamChatMessage {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  locationId  String?
+  agentName   String
+  agentRole   String
+  agentAvatar String   @default("🤖")
+  message     String   @db.Text
+  messageType String   @default("update")
+  contactId   String?
+  contactName String?
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([locationId])
+  @@index([createdAt])
+}
+
+// ─── CLIENT ACCESS LAYER ──────────────────────────────────────────
+
+model LocationMember {
+  id          String   @id @default(cuid())
+  userId      String                          // the client user
+  user        User     @relation("ClientMember", fields: [userId], references: [id], onDelete: Cascade)
+  locationId  String                          // the location they belong to
+  location    Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  ownerId     String                          // the agency owner's userId
+  role        String   @default("client")     // client | manager
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, locationId])
+  @@index([userId])
+  @@index([locationId])
+  @@index([ownerId])
+}
+
+model ClientInvite {
+  id          String   @id @default(cuid())
+  ownerId     String                          // agency user who sent it
+  locationId  String
+  location    Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  email       String?                         // pre-fill if known
+  token       String   @unique @default(cuid())
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  acceptedBy  String?                         // userId who accepted
+  createdAt   DateTime @default(now())
+
+  @@index([ownerId])
+  @@index([token])
+}

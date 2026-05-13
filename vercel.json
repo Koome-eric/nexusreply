@@ -1,0 +1,26 @@
+{
+  "buildCommand": "prisma generate && next build",
+  "functions": {
+    "app/api/ai/process/route.ts": {
+      "maxDuration": 30
+    },
+    "app/api/ghl/webhook/route.ts": {
+      "maxDuration": 30
+    },
+    "app/api/webhook/ghl/route.ts": {
+      "maxDuration": 30
+    },
+    "app/api/webhook/message/route.ts": {
+      "maxDuration": 10
+    },
+    "app/api/cron/sync/route.ts": {
+      "maxDuration": 60
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/sync",
+      "schedule": "* * * * *"
+    }
+  ]
+}
