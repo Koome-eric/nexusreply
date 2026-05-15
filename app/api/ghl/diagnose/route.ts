@@ -615,6 +615,109 @@ export async function POST(req: NextRequest) {
   }
 
   // ─────────────────────────────────────────────
+  // TEST 9 — AUTOMATION STATUS
+  // ─────────────────────────────────────────────
+
+  try {
+    const automationCfg = await prisma.automationConfig.findUnique({
+      where: { locationId: location.id },
+    });
+
+    const automationOn =
+      location.automationEnabled !== false &&
+      (!automationCfg || automationCfg.enabled !== false);
+
+    results.push({
+      name: "9. Automation status",
+      status: automationOn ? "pass" : "warn",
+      message: automationOn
+        ? "Automation is ENABLED — AI will reply to incoming messages."
+        : "Automation is DISABLED. Go to Settings → toggle Automation ON to activate AI replies.",
+      data: {
+        locationAutomationEnabled: location.automationEnabled,
+        configEnabled: automationCfg?.enabled ?? "no config (defaults to enabled)",
+        emailEnabled:  automationCfg?.emailEnabled ?? true,
+        smsEnabled:    automationCfg?.smsEnabled ?? true,
+      },
+    });
+  } catch (err) {
+    results.push({ name: "9. Automation status", status: "warn", message: String(err) });
+  }
+
+  // ─────────────────────────────────────────────
+  // TEST 10 — RECENT WEBHOOK EVENTS
+  // ─────────────────────────────────────────────
+
+  try {
+    const recentEvents = await prisma.webhookEvent.findMany({
+      where: { locationId: location.id },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+    });
+
+    const last24h = recentEvents.filter(
+      e => e.createdAt > new Date(Date.now() - 24 * 60 * 60 * 1000)
+    );
+
+    results.push({
+      name: "10. Recent webhook events",
+      status: last24h.length > 0 ? "pass" : "warn",
+      message: last24h.length > 0
+        ? `${last24h.length} webhook event(s) received in the last 24 hours.`
+        : "No webhook events in last 24 hours. Check your GHL Workflow is published and the webhook URL is correct.",
+      data: {
+        totalEvents: recentEvents.length,
+        last24hEvents: last24h.length,
+        latest: recentEvents[0]
+          ? {
+              source: recentEvents[0].source,
+              messageType: recentEvents[0].messageType,
+              processed: recentEvents[0].processed,
+              error: recentEvents[0].error,
+              createdAt: recentEvents[0].createdAt.toISOString(),
+              messagePreview: recentEvents[0].messageBody.slice(0, 100),
+            }
+          : null,
+      },
+    });
+  } catch (err) {
+    results.push({ name: "10. Recent webhook events", status: "fail", message: String(err) });
+  }
+
+  // ─────────────────────────────────────────────
+  // TEST 11 — CONVERSATION CACHE
+  // ─────────────────────────────────────────────
+
+  try {
+    const cachedConvs = await prisma.conversationCache.findMany({
+      where: { locationId: location.id },
+      orderBy: { lastMessageAt: "desc" },
+      take: 5,
+    });
+
+    results.push({
+      name: "11. Conversation cache",
+      status: cachedConvs.length > 0 ? "pass" : "warn",
+      message: cachedConvs.length > 0
+        ? `${cachedConvs.length} conversations cached. These appear on the Conversations page.`
+        : "No conversations in cache. After a lead emails, it should appear here within seconds.",
+      data: {
+        count: cachedConvs.length,
+        latest: cachedConvs[0]
+          ? {
+              contactName: cachedConvs[0].contactName,
+              contactEmail: cachedConvs[0].contactEmail,
+              lastMessageAt: cachedConvs[0].lastMessageAt.toISOString(),
+              status: cachedConvs[0].status,
+            }
+          : null,
+      },
+    });
+  } catch (err) {
+    results.push({ name: "11. Conversation cache", status: "fail", message: String(err) });
+  }
+
+  // ─────────────────────────────────────────────
   // SUMMARY
   // ─────────────────────────────────────────────
 

@@ -56,7 +56,9 @@ function categorise(conv: {
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
 
-  const userId = (session?.user as { id?: string })?.id;
+  const sessionUser = session?.user as { id?: string; role?: string } | undefined;
+  const userId = sessionUser?.id;
+  const userRole = sessionUser?.role ?? "user";
 
   if (!userId) {
     return NextResponse.json(
@@ -67,8 +69,25 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
 
-  const locationId = searchParams.get("locationId") || undefined;
+  let locationId = searchParams.get("locationId") || undefined;
   const sync = searchParams.get("sync") === "true";
+
+  // ── Client users: resolve their locationId and ownerUserId ──
+  // ConversationCache.userId = agency owner's userId (not client's userId).
+  // We must query by locationId instead of userId for client role.
+  let ownerUserId = userId; // for non-client roles, userId is the owner
+  if (userRole === "client") {
+    const membership = await prisma.locationMember.findFirst({
+      where: { userId },
+      select: { locationId: true, ownerId: true },
+    });
+    if (!membership) {
+      return NextResponse.json({ conversations: [], counts: { all: 0, active: 0, waiting_reply: 0, human_needed: 0, won: 0, new: 0 } });
+    }
+    // Override locationId with the client's actual location
+    locationId  = membership.locationId;
+    ownerUserId = membership.ownerId;
+  }
 
   // ───────────────────────────────────────────────────────────
   // STEP 1: Load cached conversations
@@ -76,8 +95,12 @@ export async function GET(req: NextRequest) {
 
   const cached = await prisma.conversationCache.findMany({
     where: {
-      userId,
-      ...(locationId && { locationId }),
+      // For clients: query by locationId (owner userId won't match session userId)
+      // For owners:  query by userId + optional locationId filter
+      ...(userRole === "client"
+        ? { locationId }
+        : { userId: ownerUserId, ...(locationId && { locationId }) }
+      ),
     },
     orderBy: {
       lastMessageAt: "desc",
@@ -116,7 +139,7 @@ export async function GET(req: NextRequest) {
 
         prisma.aIMessageLog.count({
           where: {
-            userId,
+            userId: ownerUserId,
             contactId: conv.contactId,
           },
         }),
@@ -124,7 +147,7 @@ export async function GET(req: NextRequest) {
 
       let logs = await prisma.aIMessageLog.findMany({
         where: {
-          userId,
+          userId: ownerUserId,
           conversationId: conv.ghlConversationId,
         },
         orderBy: {
@@ -151,7 +174,7 @@ export async function GET(req: NextRequest) {
       if (!logs.length) {
         logs = await prisma.aIMessageLog.findMany({
           where: {
-            userId,
+            userId: ownerUserId,
             contactId: conv.contactId,
           },
           orderBy: {
@@ -270,7 +293,7 @@ export async function GET(req: NextRequest) {
       ? await prisma.location.findMany({
           where: {
             id: locationId,
-            userId,
+            userId: ownerUserId,
           },
           select: {
             id: true,
@@ -278,7 +301,7 @@ export async function GET(req: NextRequest) {
           },
         })
       : await prisma.location.findMany({
-          where: { userId },
+          where: { userId: ownerUserId },
           select: {
             id: true,
             ghlLocationId: true,
@@ -416,8 +439,10 @@ export async function GET(req: NextRequest) {
     const freshCached =
       await prisma.conversationCache.findMany({
         where: {
-          userId,
-          ...(locationId && { locationId }),
+          ...(userRole === "client"
+            ? { locationId }
+            : { userId: ownerUserId, ...(locationId && { locationId }) }
+          ),
         },
 
         orderBy: {
@@ -487,13 +512,25 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
 
-  const userId = (session?.user as { id?: string })?.id;
+  const sessionUser = session?.user as { id?: string; role?: string } | undefined;
+  const userId = sessionUser?.id;
+  const userRole = sessionUser?.role ?? "user";
 
   if (!userId) {
     return NextResponse.json(
       { error: "Unauthorized" },
       { status: 401 }
     );
+  }
+
+  // For client role, resolve the agency owner userId for DB queries
+  let ownerUserId = userId;
+  if (userRole === "client") {
+    const membership = await prisma.locationMember.findFirst({
+      where: { userId },
+      select: { ownerId: true },
+    });
+    if (membership) ownerUserId = membership.ownerId;
   }
 
   const {
@@ -526,6 +563,8 @@ export async function POST(req: NextRequest) {
     body: string;
     direction: string;
     messageType: string;
+    from?: string;
+    to?: string[];
     dateAdded: string;
     attachments?: string[];
   }> = [];
@@ -599,21 +638,43 @@ export async function POST(req: NextRequest) {
                 }
               }
 
+              // Determine true direction using from/to vs contact email.
+              // GHL LC Email marks AI-sent messages as "inbound" because they
+              // arrive via SMTP — we correct this by comparing sender email.
+              const contactEmail = cached?.contactEmail?.toLowerCase() ?? "";
+              const msgFrom = String(m.from || "").toLowerCase();
+              const ghlDir  = String(m.direction || "").toLowerCase();
+
+              let trueDirection: string;
+              if (msgFrom && contactEmail && msgFrom.includes(contactEmail.split("@")[0] ?? "")) {
+                // from address contains the contact's local part → lead sent it
+                trueDirection = "inbound";
+              } else if (msgFrom && contactEmail && msgFrom === contactEmail) {
+                trueDirection = "inbound";
+              } else if (msgFrom && contactEmail && !msgFrom.includes(contactEmail)) {
+                // from is a different address → our system sent it
+                trueDirection = "outbound";
+              } else {
+                // fallback to GHL's direction field
+                trueDirection = ghlDir || "outbound";
+              }
+
               return {
                 id: m.id,
 
                 body:
                   body || "(no content)",
 
-                direction: String(
-                  m.direction || "outbound"
-                ),
+                direction: trueDirection,
 
                 messageType: String(
                   m.messageType ||
                     m.type ||
                     "SMS"
                 ),
+
+                from: m.from || "",
+                to:   m.to   || [],
 
                 dateAdded: m.dateAdded,
 
@@ -645,7 +706,7 @@ export async function POST(req: NextRequest) {
   const aiLogs =
     await prisma.aIMessageLog.findMany({
       where: {
-        userId,
+        userId: ownerUserId,
         conversationId: ghlConversationId,
       },
 
@@ -685,6 +746,8 @@ export async function POST(req: NextRequest) {
     body: string;
     direction: string;
     messageType: string;
+    from?: string;
+    to?: string[];
     dateAdded: string;
     attachments: string[];
 
@@ -730,11 +793,26 @@ export async function POST(req: NextRequest) {
         );
       });
 
+      // Correct GHL direction using our AI logs as source of truth.
+      // GHL sometimes marks AI-sent emails as "inbound" due to LC Email routing.
+      let correctedDirection = m.direction;
+      if (matchedLog) {
+        if (matchedLog.aiResponse && m.body &&
+            matchedLog.aiResponse.trim() === m.body.trim()) {
+          correctedDirection = "outbound"; // AI sent this
+        } else if (matchedLog.inputMessage && m.body &&
+            matchedLog.inputMessage.trim() === m.body.trim()) {
+          correctedDirection = "inbound"; // Lead sent this
+        }
+      }
+
       return {
         id: m.id,
         body: m.body,
-        direction: m.direction,
+        direction: correctedDirection,
         messageType: m.messageType,
+        from: m.from || "",
+        to:   m.to   || [],
         dateAdded: m.dateAdded,
         attachments: m.attachments || [],
 

@@ -304,7 +304,7 @@ export async function syncMessagesForLocation(
 
 export async function syncAllActiveLocations(appUrl: string): Promise<void> {
   const locations = await prisma.location.findMany({
-    where:  { isActive: true, automationEnabled: true },
+    where:  { isActive: true },
     select: { id: true, ghlLocationId: true, userId: true },
   });
 

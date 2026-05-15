@@ -32,7 +32,7 @@ export default function ClientSettingsPage() {
   const { locationId } = useClientContext();
 
   const [config, setConfig] = useState<Config>({
-    enabled: false,
+    enabled: true,
     smsEnabled: true,
     emailEnabled: true,
     aiModel: "gpt-4o-mini",
@@ -68,7 +68,16 @@ export default function ClientSettingsPage() {
     try {
       const res = await fetch("/api/client/automation");
       const data = await res.json();
-      if (data.config) setConfig(data.config);
+      if (data.config) {
+        setConfig(data.config);
+      } else {
+        // First time — auto-save enabled defaults so automation works immediately
+        await fetch("/api/client/automation", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enabled: true, emailEnabled: true, smsEnabled: true }),
+        });
+      }
     } catch (err) {
       console.error("Failed to load settings", err);
     } finally {

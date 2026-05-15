@@ -29,12 +29,15 @@ const FIX_HINTS: Record<string, string> = {
   "Message":      "→ Make sure there is at least one conversation with messages in this GHL location.",
   "Email body":   "→ Send a fresh email to a lead, have them reply, then re-run the diagnostic.",
   "Webhook":      "→ The diagnostic tried to auto-register the webhook but GHL rejected it. Ask your account manager to manually add it in GHL → Settings → Integrations → Webhooks.",
+  "Automation":   "→ Go to Settings → toggle the Automation switch ON and click Save. Without this, the AI will not reply.",
+  "webhook events":"→ Make sure your GHL Workflow is PUBLISHED and the Webhook action URL matches exactly. Then have a lead send an email and re-run this diagnostic.",
+  "Conversation cache": "→ No conversations have been captured yet. Send a test email from a lead, wait 30 seconds, then re-run.",
   "Email reply fetch": "→ The sync path (cron job) is skipping email replies because GHL returns empty body in the messages list. The fix is in ghl-sync.ts — see the code patch provided.",
   "Contact data": "→ The conversation cache is missing contact details. This is a known issue with searchGHLConversations not fetching contact info. Apply the ghl-sync.ts patch to fix.",
 };
 
 // Tests marked as "critical" get a highlighted border
-const CRITICAL_TESTS = ["8.", "8a."];
+const CRITICAL_TESTS = ["8.", "8a.", "9.", "10.", "11."];
 
 export default function ClientDiagnosticsPage() {
   const { locationId, locationName } = useClientContext();

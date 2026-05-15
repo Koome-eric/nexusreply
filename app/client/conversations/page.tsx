@@ -58,6 +58,31 @@ function msgPreview(conv: Conversation) {
 }
 
 const TYPE_ICON: Record<string, string> = { EMAIL: "✉", SMS: "💬", CALL: "📞" };
+
+/** Clean message body for display — strips unsubscribe links and excess whitespace */
+function cleanDisplayBody(body: string): string {
+  return body
+    // strip unsubscribe URLs (full markdown-style [text](url) or raw URL)
+    .replace(/\[.*?unsubscribe.*?\]\(https?:\/\/[^\)]+\)/gi, "")
+    .replace(/https?:\/\/\S*unsubscribe\S*/gi, "")
+    // strip tracking pixel URLs
+    .replace(/https?:\/\/services\.msgsndr\.com\/\S*/gi, "")
+    // strip leftover bracket pairs
+    .replace(/\[\s*\]/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+/** Determine sender label for a message */
+function senderLabel(msg: GHLMessage, icon: string): string {
+  if (msg.direction === "inbound") {
+    return icon + " LEAD" + (msg.from ? " · " + msg.from : "");
+  }
+  // Outbound — check if it was AI or GHL workflow
+  if (msg.aiLog?.agent?.name) return `${icon} ${msg.aiLog.agent.name}${msg.aiLog.humanTookOver ? " · HUMAN" : ""}`;
+  if (msg.aiLog) return `${icon} AI AGENT`;
+  return `${icon} GHL / WORKFLOW`;  // outbound but no aiLog = sent by GHL automation, not our AI
+}
 const CAT_COLOR: Record<string, string> = {
   active: "#22c55e", waiting_reply: "#f59e0b", human_needed: "#ef4444",
   won: "#14b8a6", lost: "#445566", new: "#7c9ab8",
@@ -387,13 +412,10 @@ export default function ConversationsPage() {
                         </div>
                       )}
                       <div style={{ fontSize: "9px", color: isInbound ? "#445566" : "#14b8a6", fontWeight: 700, marginBottom: "5px", letterSpacing: "0.04em" }}>
-                        {isInbound
-                          ? `${icon} LEAD${msg.from ? ` · ${msg.from}` : ""}`
-                          : `${icon} ${msg.aiLog?.agent?.name || "AI AGENT"}${msg.aiLog?.humanTookOver ? " · HUMAN" : ""}`
-                        }
+                        {senderLabel(msg, icon)}
                       </div>
                       <div style={{ fontSize: "13px", color: isInbound ? "#c8d8e8" : "#e2eaf4", lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                        {msg.body || <span style={{ color: "#445566", fontStyle: "italic" }}>(body indexing…)</span>}
+                        {cleanDisplayBody(msg.body) || <span style={{ color: "#445566", fontStyle: "italic" }}>(body indexing…)</span>}
                       </div>
                       {msg.aiLog?.intent && (
                         <div style={{ marginTop: "6px", fontSize: "9px", color: "#2d3d50", background: "rgba(255,255,255,0.04)", padding: "2px 8px", borderRadius: "4px", display: "inline-block" }}>

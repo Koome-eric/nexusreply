@@ -3,7 +3,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/db";
 
-// Resolve client's locationId and ownerId from session
 async function getClientContext(req: NextRequest) {
   const session = await getServerSession(authOptions);
   const u = session?.user as { id?: string; role?: string } | undefined;
@@ -21,8 +20,19 @@ export async function GET(req: NextRequest) {
   const ctx = await getClientContext(req);
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const config = await prisma.automationConfig.findUnique({ where: { locationId: ctx.locationId } });
-  return NextResponse.json({ config });
+  const [config, location] = await Promise.all([
+    prisma.automationConfig.findUnique({ where: { locationId: ctx.locationId } }),
+    prisma.location.findUnique({ where: { id: ctx.locationId }, select: { automationEnabled: true } }),
+  ]);
+
+  // If no config record yet, synthesise one from location.automationEnabled
+  const effectiveConfig = config ?? (location ? {
+    enabled:      location.automationEnabled,
+    emailEnabled: true,
+    smsEnabled:   true,
+  } : null);
+
+  return NextResponse.json({ config: effectiveConfig });
 }
 
 export async function POST(req: NextRequest) {
@@ -30,17 +40,21 @@ export async function POST(req: NextRequest) {
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const data = await req.json();
-  const { locationId, ...rest } = data;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { locationId: _loc, ...rest } = data;
 
-  // Clients can only modify their own location's automation
   const config = await prisma.automationConfig.upsert({
-    where: { locationId: ctx.locationId },
+    where:  { locationId: ctx.locationId },
     update: rest,
     create: { userId: ctx.ownerId, locationId: ctx.locationId, ...rest },
   });
 
+  // Always sync location.automationEnabled with config.enabled
   if (rest.enabled !== undefined) {
-    await prisma.location.update({ where: { id: ctx.locationId }, data: { automationEnabled: rest.enabled } });
+    await prisma.location.update({
+      where: { id: ctx.locationId },
+      data:  { automationEnabled: rest.enabled },
+    });
   }
 
   return NextResponse.json({ success: true, config });
