@@ -20,6 +20,7 @@ const WEBHOOK_EVENTS = [
   "ContactCreate",
   "ContactUpdate",
   "ConversationCreate",
+  "ConversationUpdate",
 ];
 
 function buildWebhookUrl(): string {

@@ -687,18 +687,18 @@ export default function ClientSettingsPage() {
 
               {/* Explanation callout */}
               <div style={{ background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.15)", borderRadius: "10px", padding: "12px 14px", marginBottom: "16px", fontSize: "12px", color: "#f59e0b", lineHeight: 1.7 }}>
-                <strong>Why is this needed?</strong> GHL private API keys cannot create webhooks via API — they must be added manually in the GoHighLevel dashboard. This takes ~60 seconds. Follow the steps below exactly.
+                <strong>Why is this needed?</strong> Paste this URL into a GHL Workflow Webhook action triggered by Customer Replied. When a lead replies to an email, GHL fires the webhook and NexusReply AI automatically responds. Takes about 2 minutes to set up.
               </div>
 
               {/* Step-by-step */}
               {[
-                { n: 1, title: "Open GoHighLevel", body: "Log in to your GoHighLevel account and navigate to the sub-account (location) for this integration." },
-                { n: 2, title: 'Go to Settings → Integrations → Webhooks', body: 'In the left sidebar: Settings → Integrations, then click the "Webhooks" tab.' },
-                { n: 3, title: "Click \"Add Webhook\" or \"+\"", body: "A modal will appear asking for URL, name, and events." },
-                { n: 4, title: "Paste the Webhook URL", body: null },
-                { n: 5, title: "Set the name to \"NexusReply\"", body: "Any name works — this is just for your reference in GHL." },
-                { n: 6, title: "Enable these events", body: null },
-                { n: 7, title: "Save and confirm below", body: "Click Save in GHL, then click \"I've Done This\" below to mark the webhook as active in our system." },
+                { n: 1, title: "Open GoHighLevel Workflows", body: "In your GHL sub-account, go to Automation → Workflows and create a new workflow (or open an existing one)." },
+                { n: 2, title: "Set the trigger to \"Customer Replied\"", body: 'Click "+ Add Trigger", search for "Customer Replied" and select it. Set the filter to Reply Type: Email.' },
+                { n: 3, title: 'Add a "Webhook" action', body: 'Click "+ Add Action", search for "Webhook" and select it. Set Method to POST.' },
+                { n: 4, title: "Paste the Webhook URL below", body: null },
+                { n: 5, title: "Leave Custom Data empty", body: "NexusReply uses the standard contact data GHL sends automatically — no custom fields needed." },
+                { n: 6, title: "Save the action and publish the workflow", body: "Click Save in the Webhook action, then publish the workflow. NexusReply will now receive email replies and respond via AI." },
+                { n: 7, title: "Confirm below", body: "Click \"I\'ve Done This\" so NexusReply marks your webhook as active." },
               ].map(step => (
                 <div key={step.n} style={{ display: "flex", gap: "12px", marginBottom: "14px" }}>
                   <div style={{ width: "22px", height: "22px", borderRadius: "50%", flexShrink: 0, background: "rgba(20,184,166,0.15)", border: "1px solid rgba(20,184,166,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px", fontWeight: 800, color: "#14b8a6" }}>
